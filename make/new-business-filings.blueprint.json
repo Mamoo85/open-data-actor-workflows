@@ -1,0 +1,88 @@
+{
+  "name": "New Business Filings: New LLCs and Corporations, $4/1k to Google Sheets",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true
+      },
+      "mapper": {
+        "url": "https://api.apify.com/v2/acts/transparent_meteorite~new-business-filings/run-sync-get-dataset-items",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_APIFY_TOKEN"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"states\": [\"CO\", \"NY\", \"OR\", \"CT\"], \"daysBack\": 7, \"maxItems\": 5}",
+        "parseResponse": true,
+        "timeout": 300,
+        "shareCookies": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "mapper": {
+        "array": "{{1.data}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "google-sheets:addRow",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": 0
+      },
+      "mapper": {
+        "mode": "select",
+        "valueInputOption": "USER_ENTERED",
+        "insertUnformatted": false,
+        "spreadsheetId": "YOUR_SHEET_ID",
+        "sheetId": "Sheet1",
+        "includesHeaders": true,
+        "values": {}
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us1.make.com"
+  }
+}

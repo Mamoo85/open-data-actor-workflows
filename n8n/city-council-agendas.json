@@ -1,0 +1,206 @@
+{
+  "name": "City Council Meetings & Agendas: Legistar Votes, PDFs | $1/1k to Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## City Council Meetings & Agendas: Legistar Votes, PDFs | $1/1k\nCity council meetings and agenda items from 18 US cities via the official Legistar Web API. Meeting date and time, body, matter, status, action, vote result, agenda PDF and attachment links. Keyword...\n\n**Setup (about 3 minutes)**\n1. Credentials > New > *Header Auth*. Name it `Apify API token`. Header name `Authorization`, value `Bearer YOUR_APIFY_TOKEN` (token: Apify Console > Settings > Integrations).\n2. Open *Append to Google Sheet*, connect Google Sheets OAuth2, set your spreadsheet (replace `YOUR_SHEET_ID`) and tab.\n3. Edit the JSON body in *Run Apify actor* to your own filters (see https://apify.com/transparent_meteorite/city-council-agendas).\n4. Click *Execute workflow* to test, then activate. The schedule trigger runs daily at 07:00.\n\nMaintained by the author of this actor. Pay-per-result pricing; the free Apify plan credit covers a trial. Sample input uses a small result limit.",
+        "height": 380,
+        "width": 520
+      },
+      "id": "80a775ed0a87",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "a6e84b1336e6",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c7ec5c63cd22",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/transparent_meteorite~city-council-agendas/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"clients\": [\n    \"denver\"\n  ],\n  \"maxResults\": 5,\n  \"onlyNewSinceLastRun\": false\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "efd03d6690b6",
+      "name": "Run Apify actor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        250
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Apify API token"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Drop empty rows, flatten nested values so Google Sheets accepts them, cap the batch.\nconst MAX_ROWS = 500;\nconst out = [];\nfor (const item of $input.all()) {\n  const row = {};\n  let filled = 0;\n  for (const [k, v] of Object.entries(item.json)) {\n    if (v === null || v === undefined || v === '') { row[k] = ''; continue; }\n    filled++;\n    row[k] = (typeof v === 'object') ? JSON.stringify(v) : v;\n  }\n  if (filled > 0) out.push({ json: row });\n  if (out.length >= MAX_ROWS) break;\n}\nreturn out;"
+      },
+      "id": "36490477a642",
+      "name": "Clean rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        230
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "0f3af8758d53",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        230
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Apify run failed for city-council-agendas. Check the token credential, plan credit and input JSON."
+      },
+      "id": "7e637ebf4406",
+      "name": "Run failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify actor": {
+      "main": [
+        [
+          {
+            "node": "Clean rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean rows": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
