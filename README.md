@@ -1,4 +1,4 @@
-# Open data actor workflows
+# Open data actor workflows: n8n, Make and Zapier templates for Apify actors
 
 Ready-made automation workflows for 24 open-data and lead-generation actors on Apify. Each one calls an actor, cleans the rows and appends them to Google Sheets, on a schedule or on demand. Formats: **n8n** (importable JSON), **Make** (blueprint, best effort), **Zapier** (copy-paste recipe).
 
