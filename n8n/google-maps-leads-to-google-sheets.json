@@ -1,0 +1,213 @@
+{
+  "name": "Google Maps leads (phone, website, rating) to Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Google Maps leads to Google Sheets\nSearch Google Maps like a customer would (keyword + city) and drop every business into a sheet: name, category, address, phone, website, rating, review count. Re-runs update existing rows, so the sheet stays one row per place.\n\n**Setup (about 3 minutes)**\n1. Credentials > New > *Header Auth*. Name it `Apify API token`. Header name `Authorization`, value `Bearer YOUR_APIFY_TOKEN` (token: Apify Console > Settings > Integrations).\n2. Open the Google Sheets node(s), connect Google Sheets OAuth2, and replace `YOUR_SHEET_ID` (and the tab name if needed).\n3. Edit `searchStringsArray` and `locationQuery` in *Run Apify actor* (more options: the actor page).\n4. Click *Execute workflow* to test with the small sample input, then activate.\n\nRuns the Apify actor https://apify.com/transparent_meteorite/google-maps-places-scraper (pay-per-result; the free Apify plan credit covers a trial). Maintained by the author of the actor.",
+        "height": 400,
+        "width": 540
+      },
+      "id": "80a775ed0a87",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "a6e84b1336e6",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c7ec5c63cd22",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/transparent_meteorite~google-maps-places-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"searchStringsArray\": [\n    \"coffee shop\"\n  ],\n  \"locationQuery\": \"Detroit, MI\",\n  \"maxCrawledPlacesPerSearch\": 20\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "efd03d6690b6",
+      "name": "Run Apify actor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        250
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Apify API token"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One clean lead row per place. Re-runs update the same row (matched on placeId) instead of duplicating.\nconst out = [];\nfor (const it of $input.all()) {\n  const p = it.json;\n  if (!p.placeId) continue;\n  out.push({ json: {\n    placeId: p.placeId,\n    name: p.title || '',\n    category: p.categoryName || '',\n    address: p.address || '',\n    city: p.city || '',\n    state: p.state || '',\n    phone: p.phone || '',\n    website: p.website || '',\n    rating: p.totalScore ?? '',\n    reviews: p.reviewsCount ?? '',\n    claimedByOwner: p.claimedByOwner ?? '',\n    permanentlyClosed: p.permanentlyClosed ?? '',\n    googleMapsUrl: p.url || '',\n    searchedFor: p.searchString || '',\n    scrapedAt: p.scrapedAt || new Date().toISOString(),\n  } });\n}\nreturn out;"
+      },
+      "id": "dd4d447a60f6",
+      "name": "Build lead rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        230
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "placeId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "2761839cf2db",
+      "name": "Append or update lead in Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        230
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Apify run failed for google-maps-places-scraper. Check the token credential, plan credit and input JSON."
+      },
+      "id": "7e637ebf4406",
+      "name": "Run failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify actor": {
+      "main": [
+        [
+          {
+            "node": "Build lead rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build lead rows": {
+      "main": [
+        [
+          {
+            "node": "Append or update lead in Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

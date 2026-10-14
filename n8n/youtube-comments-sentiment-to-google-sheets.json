@@ -1,0 +1,273 @@
+{
+  "name": "YouTube comments sentiment to Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## YouTube comments to Google Sheets for sentiment\nPull the comments from any public YouTube video(s) (top or newest), score each as positive / neutral / negative, write one row per comment to the *Comments* tab and a roll-up per video to the *Summary* tab. Commenter names and channel links are intentionally not stored.\n\n**Setup (about 3 minutes)**\n1. Credentials > New > *Header Auth*. Name it `Apify API token`. Header name `Authorization`, value `Bearer YOUR_APIFY_TOKEN` (token: Apify Console > Settings > Integrations).\n2. Open the Google Sheets node(s), connect Google Sheets OAuth2, and replace `YOUR_SHEET_ID` (and the tab name if needed). Create two tabs: `Comments` and `Summary`.\n3. Edit `startUrls` (videos, Shorts, playlists or channels) and `maxComments` in *Run Apify actor*.\n4. Click *Execute workflow* to test with the small sample input, then activate.\n\nRuns the Apify actor https://apify.com/transparent_meteorite/youtube-comments-scraper (pay-per-result; the free Apify plan credit covers a trial). Maintained by the author of the actor.",
+        "height": 400,
+        "width": 540
+      },
+      "id": "80a775ed0a87",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "a6e84b1336e6",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c7ec5c63cd22",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/transparent_meteorite~youtube-comments-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"startUrls\": [\n    {\n      \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\"\n    }\n  ],\n  \"maxComments\": 100,\n  \"sortBy\": \"TOP\",\n  \"includeReplies\": false\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "efd03d6690b6",
+      "name": "Run Apify actor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        250
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Apify API token"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quick keyword sentiment (no external API, no cost). Replace with an LLM node if you want nuance.\nconst POS = ['love','great','amazing','awesome','best','good','nice','beautiful','perfect','thank','thanks','legend','classic','favorite','favourite','brilliant','fantastic','wonderful','happy','enjoy','enjoyed','excellent','cool','fun','masterpiece'];\nconst NEG = ['hate','bad','worst','terrible','awful','boring','trash','garbage','stupid','annoying','disappointed','disappointing','waste','sucks','cringe','scam','fake','horrible','ugly','broken','useless','overrated'];\nconst words = (t) => (String(t || '').toLowerCase().match(/[a-z']+/g) || []);\nconst out = [];\nfor (const it of $input.all()) {\n  const c = it.json;\n  if (!c.commentId) continue;\n  const w = words(c.text);\n  let score = 0;\n  for (const x of w) { if (POS.includes(x)) score++; if (NEG.includes(x)) score--; }\n  out.push({ json: {\n    commentId: c.commentId,\n    videoTitle: c.videoTitle || '',\n    videoUrl: c.videoUrl || '',\n    comment: c.text || '',\n    likes: c.likeCount ?? 0,\n    replies: c.replyCount ?? 0,\n    isReply: c.isReply ?? false,\n    publishedAtApprox: c.publishedAtApprox || c.publishedTimeText || '',\n    sentimentScore: score,\n    sentiment: score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral',\n  } });\n}\nreturn out;"
+      },
+      "id": "bc64c414d3ed",
+      "name": "Score sentiment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        230
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Comments",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "commentId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "c66355b8ae4c",
+      "name": "Append comments (Comments tab)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Roll the scored comments up into one summary row per video.\nconst by = {};\nfor (const it of $input.all()) {\n  const r = it.json;\n  const k = r.videoUrl || r.videoTitle;\n  by[k] = by[k] || { date: new Date().toISOString().slice(0, 10), video: r.videoTitle, videoUrl: r.videoUrl, comments: 0, positive: 0, neutral: 0, negative: 0, likesOnComments: 0 };\n  by[k].comments++; by[k][r.sentiment]++; by[k].likesOnComments += Number(r.likes) || 0;\n}\nreturn Object.values(by).map((s) => ({ json: { ...s, positivePct: Math.round(100 * s.positive / s.comments), negativePct: Math.round(100 * s.negative / s.comments) } }));"
+      },
+      "id": "21b5a8784b86",
+      "name": "Roll up per video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        330
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Summary",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "93822721caa7",
+      "name": "Append summary (Summary tab)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1440,
+        330
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Apify run failed for youtube-comments-scraper. Check the token credential, plan credit and input JSON."
+      },
+      "id": "7e637ebf4406",
+      "name": "Run failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify actor": {
+      "main": [
+        [
+          {
+            "node": "Score sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score sentiment": {
+      "main": [
+        [
+          {
+            "node": "Append comments (Comments tab)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Roll up per video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roll up per video": {
+      "main": [
+        [
+          {
+            "node": "Append summary (Summary tab)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

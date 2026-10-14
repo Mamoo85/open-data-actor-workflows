@@ -1,0 +1,206 @@
+{
+  "name": "Amazon product price tracker to Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Amazon product price tracker to Google Sheets\nTrack the Amazon price of any list of ASINs. Each run appends one row per product with the price, the previous price and the change, so the sheet is a price history you can chart or filter for drops.\n\n**Setup (about 3 minutes)**\n1. Credentials > New > *Header Auth*. Name it `Apify API token`. Header name `Authorization`, value `Bearer YOUR_APIFY_TOKEN` (token: Apify Console > Settings > Integrations).\n2. Open the Google Sheets node(s), connect Google Sheets OAuth2, and replace `YOUR_SHEET_ID` (and the tab name if needed).\n3. Edit the `asins` list and `marketplace` (US, UK, DE, CA) in *Run Apify actor*.\n4. Click *Execute workflow* to test with the small sample input, then activate.\n\nRuns the Apify actor https://apify.com/transparent_meteorite/amazon-product-search (pay-per-result; the free Apify plan credit covers a trial). Maintained by the author of the actor.",
+        "height": 400,
+        "width": 540
+      },
+      "id": "80a775ed0a87",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "a6e84b1336e6",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c7ec5c63cd22",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/transparent_meteorite~amazon-product-search/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"asins\": [\n    \"B07CMS5Q6P\",\n    \"B09B8V1LZ3\"\n  ],\n  \"marketplace\": \"US\",\n  \"maxItems\": 20,\n  \"includeDetails\": false\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "efd03d6690b6",
+      "name": "Run Apify actor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        250
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Apify API token"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Price log row per product per run, with the change since the previous run (remembered in workflow static data).\nconst sd = $getWorkflowStaticData('global');\nsd.lastPrice = sd.lastPrice || {};\nconst day = new Date().toISOString().slice(0, 10);\nconst out = [];\nfor (const it of $input.all()) {\n  const p = it.json;\n  if (!p.asin) continue;\n  const price = typeof p.price === 'number' ? p.price : parseFloat(String(p.price ?? '').replace(/[^0-9.]/g, ''));\n  const prev = sd.lastPrice[p.asin];\n  const has = Number.isFinite(price);\n  const change = has && Number.isFinite(prev) ? Math.round((price - prev) * 100) / 100 : '';\n  const pct = has && Number.isFinite(prev) && prev ? Math.round(1000 * (price - prev) / prev) / 10 : '';\n  if (has) sd.lastPrice[p.asin] = price;\n  out.push({ json: {\n    date: day, asin: p.asin, title: p.title || '', brand: p.brand || '',\n    price: has ? price : '', currency: p.currency || '', previousPrice: Number.isFinite(prev) ? prev : '',\n    change, changePct: pct, listPrice: p.listPrice ?? '', rating: p.rating ?? '', reviewCount: p.reviewCount ?? '',\n    availability: p.availability || '', url: p.url || '',\n  } });\n}\nreturn out;"
+      },
+      "id": "a6dcf728db0b",
+      "name": "Add price change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        230
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "0f3af8758d53",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        230
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Apify run failed for amazon-product-search. Check the token credential, plan credit and input JSON."
+      },
+      "id": "7e637ebf4406",
+      "name": "Run failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify actor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify actor": {
+      "main": [
+        [
+          {
+            "node": "Add price change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add price change": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

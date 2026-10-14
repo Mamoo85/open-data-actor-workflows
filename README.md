@@ -41,6 +41,20 @@ Ready-made automation workflows for 24 open-data and lead-generation actors on A
 | [LinkedIn Public Jobs Scraper (no login) | Salary & Level](https://apify.com/transparent_meteorite/linkedin-public-jobs) | 28 filled fields per LinkedIn job vs 23 in our side-by-side test, at a lower price per job. Search public... | [n8n](n8n/linkedin-public-jobs.json) | [Make](make/linkedin-public-jobs.blueprint.json) | [Zapier](zapier/linkedin-public-jobs.md) |
 | [Meta Ad Library Scraper](https://apify.com/transparent_meteorite/meta-ad-library) | Image or video URL on 100% of ads vs 70% in our side-by-side test, at $0.00065 per ad. Search the public Meta... | [n8n](n8n/meta-ad-library.json) | [Make](make/meta-ad-library.blueprint.json) | [Zapier](zapier/meta-ad-library.md) |
 
+## Five use-case workflows
+
+Importable n8n workflows built around the most common jobs (each calls an actor through the Apify run-sync API; sample inputs checked live):
+
+| Workflow | File |
+|---|---|
+| Google Maps leads (phone, website, rating) to Google Sheets | [n8n/google-maps-leads-to-google-sheets.json](n8n/google-maps-leads-to-google-sheets.json) |
+| TikTok profile stats to Google Sheets | [n8n/tiktok-profile-stats-to-google-sheets.json](n8n/tiktok-profile-stats-to-google-sheets.json) |
+| YouTube comments sentiment to Google Sheets | [n8n/youtube-comments-sentiment-to-google-sheets.json](n8n/youtube-comments-sentiment-to-google-sheets.json) |
+| LinkedIn jobs daily digest to Slack and Google Sheets | [n8n/linkedin-jobs-daily-to-slack-and-google-sheets.json](n8n/linkedin-jobs-daily-to-slack-and-google-sheets.json) |
+| Amazon product price tracker to Google Sheets | [n8n/amazon-price-tracker-to-google-sheets.json](n8n/amazon-price-tracker-to-google-sheets.json) |
+
+Regenerate with `python tools/generate_usecases.py`.
+
 ## Quick start (n8n)
 
 1. Get an Apify API token: Apify Console > Settings > Integrations.
